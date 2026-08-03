@@ -5,17 +5,16 @@ import arcana.aura.AuraWorld;
 import arcana.aura.Node;
 import arcana.aura.NodeType;
 import arcana.aura.NodeTypes;
+import net.minecraft.structure.StructurePlacementData;
 import net.minecraft.structure.StructureTemplate;
-import net.minecraft.util.BlockMirror;
-import net.minecraft.util.BlockRotation;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.ServerWorldAccess;
 import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,7 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Mixin(StructureTemplate.class)
-public class StructureTemplateMixin{
+@Pseudo
+public class StructureTemplateMixinForge{
 	
 	@Shadow
 	@Final
@@ -36,14 +36,10 @@ public class StructureTemplateMixin{
 	@Unique
 	private List<StructureTemplate.StructureEntityInfo> stashedEntities;
 	
-	@Inject(method = "spawnEntities", at = @At("HEAD"))
+	@Inject(method = "addEntitiesToWorld", at = @At("HEAD"))
 	private void addStructureBlockNodes(ServerWorldAccess world,
 	                                    BlockPos pos,
-	                                    BlockMirror mirror,
-	                                    BlockRotation rotation,
-	                                    BlockPos pivot,
-	                                    BlockBox area,
-	                                    boolean initializeMobs,
+	                                    StructurePlacementData data,
 	                                    CallbackInfo ci){
 		// stash removed entries for later
 		stashedEntities = new ArrayList<>();
@@ -55,9 +51,9 @@ public class StructureTemplateMixin{
 				String id = e.nbt.getString("id");
 				NodeType ty = NodeTypes.byName(Identifier.of(id));
 				if(ty != null){
-					Vec3d transformed = StructureTemplate.transformAround(e.pos, mirror, rotation, pivot);
+					Vec3d transformed = StructureTemplate.transformAround(e.pos, data.getMirror(), data.getRotation(), data.getPosition());
 					Vec3d offset = transformed.add(pos.getX(), pos.getY(), pos.getZ());
-					if(area == null || area.contains(BlockPos.ofFloored(offset))){
+					if(data.getBoundingBox() == null || data.getBoundingBox().contains(BlockPos.ofFloored(offset))){
 						World w = world.toServerWorld();
 						Node toAdd = new Node(ty, offset, ty.randomCap(world.getRandom()));
 						toAdd.getAspects().clear();
@@ -74,14 +70,10 @@ public class StructureTemplateMixin{
 		}
 	}
 	
-	@Inject(method = "spawnEntities", at = @At("TAIL"))
+	@Inject(method = "addEntitiesToWorld", at = @At("TAIL"))
 	private void restoreStructureBlockNodeEntities(ServerWorldAccess world,
 	                                               BlockPos pos,
-	                                               BlockMirror mirror,
-	                                               BlockRotation rotation,
-	                                               BlockPos pivot,
-	                                               BlockBox area,
-	                                               boolean initializeMobs,
+	                                               StructurePlacementData data,
 	                                               CallbackInfo ci){
 		// restore stashed entities
 		entities.addAll(stashedEntities);
